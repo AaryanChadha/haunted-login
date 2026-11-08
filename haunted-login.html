@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Haunted Login</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Layout: one haunted night field painted on a low-res canvas; a single pixel card floats over it; HUD pinned to the top. Single dark look by choice. */
+:root{
+  color-scheme: dark;
+  --night:#0e0f1d; --panel:#161a2b; --panel-2:#1e2338; --line:#383e5e;
+  --bone:#e9e3cf; --dim:#9893ad; --pumpkin:#ee7f2d; --pumpkin-dk:#a64d14;
+  --moon:#e8c35a; --slime:#9ee05a; --blood:#e2463f;
+  --display:'Press Start 2P', 'Courier New', monospace;
+  --body:'VT323', ui-monospace, 'Courier New', monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%}
+body{background:var(--night);color:var(--bone);font-family:var(--body);font-size:22px;line-height:1.2;overflow:hidden}
+body.broom, body.broom *{cursor:none !important}
+#bg{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:120}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:200;background:repeating-linear-gradient(to bottom,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
+
+#stage{position:fixed;inset:0;overflow:auto;z-index:2;display:flex;flex-direction:column;align-items:center;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:calc(84px + env(safe-area-inset-top,0px)) 40px}
+#stage.glitch{animation:glitch .22s steps(2) 1}
+@keyframes glitch{0%{transform:translate(3px,-2px);filter:hue-rotate(90deg)}50%{transform:translate(-4px,1px);filter:hue-rotate(-60deg) saturate(2)}100%{transform:none;filter:none}}
+
+/* HUD */
+.hud{position:fixed;top:0;left:0;right:0;z-index:80;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) 10px max(16px, env(safe-area-inset-left,0px));
+  background:linear-gradient(var(--night),rgba(14,15,29,.6));border-bottom:2px solid var(--line)}
+.clocks{display:flex;gap:18px;flex-wrap:wrap}
+.clock{display:flex;flex-direction:column;gap:4px}
+.clock b{font-family:var(--display);font-size:8px;letter-spacing:.08em;color:var(--dim);font-weight:400;text-transform:uppercase}
+.clock span{font-family:var(--display);font-size:12px;font-variant-numeric:tabular-nums}
+#clk-wasted{color:var(--slime)} #clk-finals{color:var(--blood)}
+.vol{display:flex;align-items:center;gap:8px;position:relative}
+.vol button{background:var(--panel-2);border:2px solid var(--line);padding:4px;display:grid;place-items:center;width:38px;height:34px}
+.vol button:active{transform:translateY(2px)}
+.vol canvas{image-rendering:pixelated;width:24px;height:24px}
+#vol-slider{width:110px;accent-color:var(--pumpkin)}
+#vol-slider.shake{animation:shake .3s steps(3)}
+@keyframes shake{0%,100%{transform:none}33%{transform:translateX(-4px)}66%{transform:translateX(4px)}}
+#vol-num{font-family:var(--display);font-size:11px;min-width:4ch;font-variant-numeric:tabular-nums}
+#vol-tip{position:absolute;right:0;top:calc(100% + 6px);background:var(--bone);color:var(--night);font-size:18px;padding:2px 8px;white-space:nowrap}
+
+/* Card */
+.card{width:min(460px,100%);background:var(--panel);border:3px solid var(--bone);
+  box-shadow:0 0 0 3px var(--night),8px 8px 0 3px rgba(0,0,0,.55);padding:22px 22px 24px;display:flex;flex-direction:column;gap:12px;position:relative}
+h1,h2{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
+h1{font-size:clamp(20px,6vw,34px);line-height:1.35;color:var(--pumpkin);text-shadow:4px 4px 0 var(--pumpkin-dk),0 0 18px rgba(238,127,45,.35)}
+h2{font-size:15px;line-height:1.5;color:var(--moon)}
+p{margin:0}
+label{font-family:var(--display);font-size:9px;letter-spacing:.06em;color:var(--dim);text-transform:uppercase}
+input[type=text]{font-family:var(--body);font-size:24px;background:var(--night);color:var(--bone);border:2px solid var(--line);padding:6px 10px;width:100%;outline:none}
+input[type=text]:focus{border-color:var(--moon)}
+input.possessed{animation:possess .35s steps(2)}
+@keyframes possess{0%{border-color:var(--blood);color:var(--blood)}100%{border-color:var(--line)}}
+.field{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font-family:var(--display);font-size:11px;letter-spacing:.04em;background:var(--pumpkin);color:var(--night);border:0;padding:12px 16px;
+  box-shadow:inset -3px -3px 0 var(--pumpkin-dk),0 0 0 2px var(--night);cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:translateY(2px)}
+.btn:focus-visible,button:focus-visible{outline:3px solid var(--moon);outline-offset:2px}
+.btn:disabled{background:var(--line);color:var(--dim);box-shadow:inset -3px -3px 0 #2a2f48;cursor:not-allowed}
+.btn.alt{background:var(--slime);box-shadow:inset -3px -3px 0 #5a8f2c,0 0 0 2px var(--night)}
+.btn.ghost{background:transparent;color:var(--bone);box-shadow:inset 0 0 0 2px var(--line)}
+.btn.sm{font-size:9px;padding:9px 12px}
+.link{background:none;border:0;color:var(--dim);font-family:var(--body);font-size:20px;text-decoration:underline;padding:0;cursor:pointer}
+.help{color:var(--dim);font-size:20px}
+.msg{min-height:1.2em;color:var(--blood);font-size:20px}
+
+/* Home */
+#home{align-items:flex-start;gap:20px}
+#home .lede{color:var(--dim);font-size:22px;max-width:34ch}
+#home canvas{image-rendering:pixelated;width:90px;height:70px;align-self:flex-end;position:absolute;right:18px;top:-58px}
+
+/* Sign up rules */
+#rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column-reverse;gap:8px}
+#rules li{border:2px solid var(--blood);background:rgba(226,70,63,.08);padding:8px 10px;display:flex;flex-direction:column;gap:4px}
+#rules li.ok{border-color:var(--slime);background:rgba(158,224,90,.07)}
+#rules li b{font-family:var(--display);font-size:8px;font-weight:400;color:var(--blood);letter-spacing:.06em}
+#rules li.ok b{color:var(--slime)}
+#rules li input{font-size:20px;padding:3px 8px;margin-top:4px}
+.emoji-btn{background:var(--panel-2);border:2px solid var(--line);font-size:18px;padding:0 6px;cursor:pointer;vertical-align:middle}
+.count{font-family:var(--display);font-size:9px;color:var(--dim);align-self:flex-end}
+
+/* Login */
+.passbox{display:flex;flex-wrap:wrap;gap:6px;background:var(--night);border:2px dashed var(--moon);padding:10px;min-height:58px;align-items:center;justify-content:center}
+.passbox.hot{border-style:solid;box-shadow:0 0 0 3px rgba(232,195,90,.25)}
+.slot{width:26px;height:34px;border-bottom:3px solid var(--line);display:grid;place-items:center;font-family:var(--display);font-size:14px;color:var(--moon)}
+.slot.f{border-color:var(--moon)}
+.captcha-row{display:flex;align-items:center;gap:12px;border:2px solid var(--line);background:var(--panel-2);padding:10px 12px}
+.checkbox{width:28px;height:28px;background:var(--bone);border:3px solid var(--night);box-shadow:0 0 0 2px var(--line);padding:0;cursor:pointer;font-family:var(--display);font-size:13px;color:var(--night)}
+.checkbox[aria-checked=true]{background:var(--slime)}
+.btn-slot{height:40px}
+#login-btn{position:fixed;z-index:70;transition:none}
+
+/* Pop-ups */
+#pops{position:fixed;inset:0;pointer-events:none;z-index:90}
+.pop{position:absolute;width:min(330px,calc(100vw - 32px));background:var(--bone);color:var(--night);border:3px solid var(--night);box-shadow:6px 6px 0 rgba(0,0,0,.6);pointer-events:auto;animation:popin .18s steps(3)}
+@keyframes popin{from{transform:scale(.6)}to{transform:none}}
+.pop-bar{background:linear-gradient(90deg,#2a3a8a,#5a6fd0);color:#fff;font-family:var(--display);font-size:9px;padding:6px 6px 6px 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pop-x{background:#d9573c;color:#fff;border:2px solid #fff;font-family:var(--display);font-size:9px;width:22px;height:20px;padding:0;cursor:pointer}
+.pop-body{display:flex;gap:12px;padding:14px 14px 6px;align-items:flex-start;font-size:22px}
+.pop-body canvas{image-rendering:pixelated;width:32px;height:32px;flex:none}
+.pop-foot{display:flex;justify-content:flex-end;padding:8px 14px 14px}
+.pop-foot .btn{background:var(--panel-2);color:var(--bone);box-shadow:inset -3px -3px 0 var(--night)}
+
+/* Overlay modals */
+.overlay{position:fixed;inset:0;z-index:100;background:rgba(6,6,14,.72);display:grid;place-items:center;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));padding-block:16px}
+.cap-img{width:100%;max-width:100%;height:auto;image-rendering:pixelated;border:2px solid var(--line);display:block}
+.cap-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.cap-grid button{padding:0;border:3px solid transparent;background:none;cursor:pointer;aspect-ratio:1;max-width:100%}
+.cap-grid button canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+.cap-grid button.sel{border-color:var(--slime)}
+.cap-head{background:#3b5fd6;color:#fff;padding:12px;font-size:22px}
+.cap-head strong{font-family:var(--display);font-size:13px;display:block;margin-top:6px;font-weight:400}
+
+/* Delhi boys */
+.bros{position:fixed;z-index:95;left:50%;top:50%;transform:translate(-50%,-50%);width:min(580px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;
+  background:var(--panel);border:4px solid var(--moon);box-shadow:0 0 0 100vmax rgba(6,6,14,.8),10px 10px 0 rgba(0,0,0,.6);padding:22px;display:flex;flex-direction:column;gap:16px;animation:walkin 1s steps(8)}
+@keyframes walkin{from{transform:translate(-170%,-50%)}to{transform:translate(-50%,-50%)}}
+.bros-h{font-family:var(--display);font-size:clamp(12px,3.4vw,16px);line-height:1.5;color:var(--pumpkin);margin:0}
+.bubble{background:var(--bone);color:var(--night);padding:12px 16px;font-size:clamp(24px,5vw,30px);line-height:1.1;position:relative;min-height:3.4em}
+.bubble::after{content:"";position:absolute;left:var(--tail,60px);bottom:-14px;border:14px solid transparent;border-top-color:var(--bone);border-bottom:0}
+.bubble em{font-style:normal;font-family:var(--display);font-size:10px;display:block;color:var(--pumpkin-dk);margin-bottom:6px}
+.bro-row{display:flex;gap:40px;align-items:flex-end;justify-content:center}
+.bro-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+.bro-row canvas{image-rendering:pixelated;width:120px;height:180px;animation:bob .5s steps(2) infinite}
+.bro-row figure:nth-child(2) canvas{animation-delay:.25s}
+.bro-row figure.talking canvas{animation-duration:.22s}
+@keyframes bob{50%{transform:translateY(-6px)}}
+.bro-row figcaption{font-family:var(--display);font-size:10px;color:var(--moon)}
+.bros .row{justify-content:center}
+.bro-cap{font-size:22px;color:var(--dim);text-align:center}
+@media (max-width:520px){.bro-row canvas{width:84px;height:126px}.bro-row{gap:24px}}
+
+/* End */
+.bar{height:22px;border:2px solid var(--bone);padding:2px;background:var(--night)}
+.bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,var(--slime) 0 10px,transparent 10px 13px)}
+#end-h{font-size:14px}
+.big{font-size:28px}
+
+@media (prefers-reduced-motion: reduce){
+  #stage.glitch{animation:none}
+  .bro-row canvas{animation:none}
+}
+@media (max-width:520px){
+  #vol-slider{width:80px}
+  .slot{width:22px;font-size:12px}
+  #home canvas{display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<header class="hud">
+  <div class="clocks">
+    <div class="clock"><b>Time wasted</b><span id="clk-wasted">00:00:00</span></div>
+    <div class="clock"><b>Finals in</b><span id="clk-finals">--</span></div>
+  </div>
+  <div class="vol">
+    <button id="vol-btn" type="button" aria-label="Speaker"><canvas id="vol-ico" width="12" height="12"></canvas></button>
+    <input type="range" id="vol-slider" min="0" max="100" value="90" aria-label="Volume">
+    <span id="vol-num">90%</span>
+    <div id="vol-tip" hidden></div>
+  </div>
+</header>
+
+<main id="stage">
+  <section id="home" class="screen card">
+    <canvas id="home-pk" width="9" height="8" aria-hidden="true"></canvas>
+    <h1>HAUNTED<br>LOGIN</h1>
+    <p class="lede">Make an account. Then try to get back into it.</p>
+    <div class="row">
+      <button class="btn" id="go-signup" type="button">Sign up</button>
+      <button class="btn alt" id="go-login" type="button">Log in</button>
+    </div>
+  </section>
+
+  <section id="signup" class="screen card" hidden>
+    <h2>Create account</h2>
+    <div class="field"><label for="su-user">Username</label><input type="text" id="su-user" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="su-pass">Password</label><input type="text" id="su-pass" autocomplete="off" spellcheck="false"></div>
+    <span class="count" id="su-count">Length 0</span>
+    <ol id="rules"></ol>
+    <div class="row">
+      <button class="btn" id="su-create" type="button" disabled>Create account</button>
+      <button class="btn ghost" id="su-skip" type="button">Skip to log in</button>
+    </div>
+  </section>
+
+  <section id="created" class="screen card" hidden>
+    <h2>Account created.</h2>
+    <p class="big">Come back later to log in.</p>
+    <div class="row"><button class="btn alt" id="later" type="button">It's later now</button></div>
+  </section>
+
+  <section id="login" class="screen card" hidden>
+    <h2>Log in</h2>
+    <div class="field"><label for="li-user">Username</label><input type="text" id="li-user" autocomplete="off" spellcheck="false"></div>
+    <div class="field">
+      <label>Password</label>
+      <div id="passbox" class="passbox" aria-live="polite"></div>
+      <div class="row" style="justify-content:space-between">
+        <button class="btn sm ghost" id="li-back" type="button">Delete</button>
+        <button class="link" id="li-forgot" type="button">forgot password?</button>
+      </div>
+    </div>
+    <p class="help">Fly the broom into a letter to grab it, then click the box to drop it in. Every character of your password, in order.</p>
+    <div class="captcha-row"><button class="checkbox" id="cap-check" type="button" role="checkbox" aria-checked="false" aria-label="I'm not a robot"></button><span>I'm not a robot</span></div>
+    <div id="btn-slot" class="btn-slot"></div>
+    <p id="li-msg" class="msg"></p>
+  </section>
+
+  <section id="end" class="screen card" hidden>
+    <h2 id="end-h">Logging in</h2>
+    <p id="end-p" class="big"></p>
+    <div class="bar" id="end-barwrap"><i id="end-bar"></i></div>
+    <div class="row" id="end-actions" hidden><button class="btn" id="end-restart" type="button">Start over</button></div>
+  </section>
+</main>
+
+<button class="btn" id="login-btn" type="button" hidden>Log in</button>
+
+<div class="bros" id="bros" role="dialog" aria-label="Aryan and Aditya" hidden>
+  <p class="bros-h">Hey! Hey! Wait up!</p>
+  <div class="bubble" id="bro-bubble"><em id="bro-who">ARYAN</em><span id="bro-line"></span></div>
+  <div class="bro-row">
+    <figure><canvas id="bro1" width="12" height="18"></canvas><figcaption>ARYAN</figcaption></figure>
+    <figure><canvas id="bro2" width="12" height="18"></canvas><figcaption>ADITYA</figcaption></figure>
+  </div>
+  <div class="row"><button class="btn sm" id="bro-no" type="button">Not interested</button></div>
+  <p class="bro-cap">what's scarier than a ghost? a delhi boy telling you about his startup.</p>
+</div>
+
+<div id="pops"></div>
+
+<div class="overlay" id="captcha" hidden>
+  <div class="card" style="gap:12px">
+    <div class="cap-head" id="cap-head"></div>
+    <div id="cap-s1"><canvas id="cap-img" class="cap-img" width="160" height="50"></canvas></div>
+    <div id="cap-s1b"><input type="text" id="cap-input" autocomplete="off" aria-label="Captcha answer"></div>
+    <div id="cap-s2" class="cap-grid" hidden></div>
+    <p class="msg" id="cap-msg"></p>
+    <div class="row" style="justify-content:space-between">
+      <button class="btn sm ghost" id="cap-new" type="button">Get a new one</button>
+      <button class="btn sm" id="cap-verify" type="button">Verify</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlg" hidden>
+  <div class="card"><h2 id="dlg-h"></h2><p id="dlg-p" class="big"></p><div class="row" id="dlg-btns"></div></div>
+</div>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const rand = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const S = { screen:'home', start:Date.now(), vol:90, account:null, captcha:false, started:false };
+try { const a = JSON.parse(localStorage.getItem('hl-account')||'null'); if (a && a.user && a.pass) S.account = a; } catch(e){}
+
+/* ---------- pixel helpers ---------- */
+function drawMap(ctx, map, pal, x, y, s){
+  for (let r=0;r<map.length;r++) for (let c=0;c<map[r].length;c++){
+    const ch = map[r][c]; if (ch==='.'||!pal[ch]) continue;
+    ctx.fillStyle = pal[ch]; ctx.fillRect(x+c*s, y+r*s, s, s);
+  }
+}
+const PUMPKIN = ["....s....","..ooOoo..",".oOoOoOo.","oeeoOoeeo","oOoOOOoOo","oommmmmoo",".oomomoo.","..ooooo.."];
+const SCARECROW = ["......HHHHH......",".....HHHHHHH.....","...HHHHHHHHHHH...","......BBBBB......","......BkBkB......","......BBBBB......","......BkkkB......",".......BBB.......",".yRRRRRRRRRRRRRy.","yyRRRRRRRRRRRRRyy",".y....RRRRR....y.","......RPRPR......","......RRRRR......","......RPRPR......",".......yyy.......",".......yWy.......","........W........","........W........","........W........","........W........","........W........","........W........","........W........"];
+const SC_PAL = {H:'#2b2018',B:'#a9844e',k:'#120e0b',R:'#6e2a2c',P:'#3f5f80',y:'#d4ae47',W:'#4e3620'};
+const BAT = [["b.....b",".bbbbb.","..b.b.."],[".......","bbbbbbb","b.b.b.b"]];
+const WITCH = [".......kk.......","......kkk.......",".....kkkkk......","...kkkkkkkkk....","......ggg.......","......gpg.......",".....ppppp......","yyy.ppppppp.....","yyyNNNNNNNNNNNN.","yyy..pp..pp....."];
+const W_PAL = {k:'#1a1426',g:'#8ad04f',p:'#5b2f82',y:'#d4ae47',N:'#7a4e2a'};
+const BRO = ["....hhhh....","...hhhhhh...","..hhhhhhhh..","..hssssssh..","..sggssggs..","..ssssssss..","...ssmmss...","....ssss....","..vvttttvv..",".vvvttttvvv.",".svvttttvvs.",".svvttttvvs.",".s.vttttv.s.","...pppppp...","...pp..pp...","...pp..pp...","...pp..pp...","..www..www.."];
+const SKULL = [".bbbbbb.","bbbbbbbb","bkkbbkkb","bkkbbkkb","bbbkkbbb",".bbbbbb.",".b.bb.b.","..bbbb.."];
+const SPEAKER = ["....b.......","...bb..s....","..bbb...s...","bbbbb.s..s..","bbbbb..s.s..","bbbbb..s.s..","bbbbb.s..s..","..bbb...s...","...bb..s....","....b......."];
+
+/* static icons */
+drawMap($('#home-pk').getContext('2d'), PUMPKIN, {s:'#3d6b2a',o:'#ee7f2d',O:'#c9601c',e:'#ffd75e',m:'#ffd75e'},0,0,1);
+drawMap($('#vol-ico').getContext('2d'), SPEAKER, {b:'#e9e3cf',s:'#ee7f2d'},0,1,1);
+drawMap($('#bro1').getContext('2d'), BRO, {h:'#16110f',s:'#c68a5c',g:'#0b0b0b',m:'#6a3a2a',v:'#5c6672',t:'#e9e3cf',p:'#2d3a5a',w:'#f2f2f2'},0,0,1);
+drawMap($('#bro2').getContext('2d'), BRO, {h:'#2a1d16',s:'#b97c50',g:'#d9a441',m:'#6a3a2a',v:'#1f5f4a',t:'#9fb7d9',p:'#3b3b3b',w:'#c9c2b0'},0,0,1);
+
+/* ---------- background field ---------- */
+const bg = $('#bg'), bctx = bg.getContext('2d');
+const PX = 4;
+const stars = Array.from({length:70},()=>({x:Math.random(),y:Math.random()*0.92,ph:Math.random(),tw:rand(.2,1.2),c:pick(['#e9e3cf','#9893ad','#e8c35a'])}));
+const fogs = Array.from({length:14},()=>({x:Math.random(),y:rand(.62,.98),v:rand(.004,.012),len:rand(30,80),th:Math.ceil(rand(2,5))}));
+const bats = Array.from({length:3},()=>({x:Math.random(),y:rand(.08,.4),v:rand(.012,.03)}));
+const pumpkins = [{x:.06,y:.95,s:2},{x:.33,y:.9,s:1},{x:.69,y:.97,s:2},{x:.9,y:.88,s:1},{x:.5,y:.99,s:1}];
+function sizeBg(){ bg.width = Math.ceil(innerWidth/PX); bg.height = Math.ceil(innerHeight/PX); }
+sizeBg();
+function drawBg(t){
+  const w=bg.width, h=bg.height, hz=Math.floor(h*0.6), c=bctx;
+  const bands=['#0a0b17','#0d0f1f','#101327','#13172f','#171b37','#1b203f'];
+  for(let i=0;i<6;i++){c.fillStyle=bands[i];c.fillRect(0,Math.floor(i*hz/6),w,Math.ceil(hz/6)+1);}
+  for(const s of stars){ if(((t*0.0004*s.tw+s.ph)%1)<0.82){c.fillStyle=s.c;c.fillRect(Math.floor(s.x*w),Math.floor(s.y*hz),1,1);} }
+  const mx=Math.floor(w*0.82), my=Math.floor(h*0.16), r=Math.max(7,Math.floor(h*0.065));
+  c.fillStyle='rgba(232,195,90,.08)';
+  for(let dy=-r-4;dy<=r+4;dy++)for(let dx=-r-4;dx<=r+4;dx++){const d=dx*dx+dy*dy; if(d<=(r+4)*(r+4)&&d>r*r)c.fillRect(mx+dx,my+dy,1,1);}
+  for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){ if(dx*dx+dy*dy<=r*r){ c.fillStyle='#e8c35a'; c.fillRect(mx+dx,my+dy,1,1);} }
+  c.fillStyle='#c9a246'; c.fillRect(mx-3,my-2,3,2); c.fillRect(mx+2,my+2,2,2); c.fillRect(mx-1,my+4,2,1);
+  for(const b of bats){ const bx=Math.floor(((b.x+t*b.v*0.001)%1.2)*w - 0.1*w); const by=Math.floor(b.y*h+Math.sin(t*0.002+b.x*9)*3); drawMap(c,BAT[Math.floor(t/180)%2],{b:'#05050c'},bx,by,1); }
+  c.fillStyle='#141a2a';
+  for(let x=0;x<w;x++){const y=hz-5-Math.floor(5*Math.sin(x*0.03)+3*Math.sin(x*0.071+1)); c.fillRect(x,y,1,hz-y+1);}
+  c.fillStyle='#14211a'; c.fillRect(0,hz,w,h-hz);
+  const cols=['#1e3022','#26392a','#2e4530','#355037','#3d5b3c'];
+  for(let rr=0;rr<10;rr++){
+    const yy=hz+Math.floor(Math.pow((rr+1)/10,1.5)*(h-hz)); const sp=5+rr*3, ht=2+rr; c.fillStyle=cols[Math.min(4,Math.floor(rr/2))];
+    for(let x=-sp;x<w+sp;x+=sp){ const sw=Math.round(Math.sin(t*0.0012+x*0.05+rr)*(rr*0.25)); const xx=x+sw+(rr%2)*Math.floor(sp/2); c.fillRect(xx,yy-ht,1,ht); if(rr>4){c.fillStyle='#6d6a36';c.fillRect(xx+sw,yy-ht-1,1,1);c.fillStyle=cols[Math.min(4,Math.floor(rr/2))];} }
+  }
+  const ss = h>180?2:1; const sx=Math.floor(w*0.14)-8*ss, sy=hz+Math.floor((h-hz)*0.55)-SCARECROW.length*ss;
+  drawMap(c,SCARECROW,SC_PAL,sx,sy,ss);
+  const flick = Math.sin(t*0.01)+Math.sin(t*0.023)>0.4 ? '#ffe27a':'#e8a83a';
+  for(const p of pumpkins){ drawMap(c,PUMPKIN,{s:'#3d6b2a',o:'#d96d24',O:'#a9521a',e:flick,m:flick},Math.floor(p.x*w),Math.floor(p.y*h)-8*p.s,p.s); }
+  c.fillStyle='rgba(175,185,215,.07)';
+  for(const f of fogs){ const fx=((f.x*w+t*f.v)%(w+100))-60; c.fillRect(Math.floor(fx),Math.floor(f.y*h),Math.floor(f.len),f.th); }
+}
+
+/* ---------- audio ---------- */
+let AC=null, master=null;
+function gainFor(v){ return (v/100)*0.5; }
+function startAudio(){
+  if (AC) { if (AC.state==='suspended') AC.resume(); return; }
+  try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return; }
+  master = AC.createGain(); master.gain.value = gainFor(S.vol); master.connect(AC.destination);
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=380;
+  const dg=AC.createGain(); dg.gain.value=0.16; lp.connect(dg); dg.connect(master);
+  [55,58.3,82.4].forEach(f=>{const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.connect(lp); o.start();});
+  const buf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const n=AC.createBufferSource(); n.buffer=buf; n.loop=true;
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=650; bp.Q.value=1.4;
+  const ng=AC.createGain(); ng.gain.value=0.28;
+  const lfo=AC.createOscillator(); lfo.frequency.value=0.09; const lg=AC.createGain(); lg.gain.value=420; lfo.connect(lg); lg.connect(bp.frequency); lfo.start();
+  n.connect(bp); bp.connect(ng); ng.connect(master); n.start();
+  const loop=()=>{ (Math.random()<0.6?screech:creak)(); setTimeout(loop, rand(5000,12000)); };
+  setTimeout(loop, 2500);
+}
+function dist(){ const k=40, n=256, cv=new Float32Array(n); for(let i=0;i<n;i++){const x=i*2/n-1; cv[i]=(3+k)*x*20*Math.PI/180/(Math.PI+k*Math.abs(x));} return cv; }
+function screech(){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='square';
+  o.frequency.setValueAtTime(rand(600,900),t); o.frequency.exponentialRampToValueAtTime(rand(2200,3000),t+0.35); o.frequency.exponentialRampToValueAtTime(420,t+1.3);
+  const vib=AC.createOscillator(); vib.frequency.value=23; const vg=AC.createGain(); vg.gain.value=110; vib.connect(vg); vg.connect(o.frequency);
+  const sh=AC.createWaveShaper(); sh.curve=dist();
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.08); g.gain.exponentialRampToValueAtTime(0.0001,t+1.4);
+  o.connect(sh); sh.connect(g); g.connect(master); o.start(t); vib.start(t); o.stop(t+1.5); vib.stop(t+1.5);
+}
+function creak(){
+  if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(90,t); o.frequency.linearRampToValueAtTime(150,t+0.9);
+  const am=AC.createOscillator(); am.type='square'; am.frequency.value=28; const ag=AC.createGain(); ag.gain.value=0.5;
+  const g=AC.createGain(); g.gain.value=0.0001; g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.22,t+0.1); g.gain.linearRampToValueAtTime(0.0001,t+1);
+  am.connect(ag); ag.connect(g.gain); o.connect(g); g.connect(master); o.start(t); am.start(t); o.stop(t+1.05); am.stop(t+1.05);
+}
+function blip(f=660,dur=0.09,type='square',vol=0.12){
+  if(!AC) return; const t=AC.currentTime; const o=AC.createOscillator(); o.type=type; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f*1.5,t+dur);
+  const g=AC.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02);
+}
+function ding(){ blip(523,0.12,'triangle',0.2); setTimeout(()=>blip(392,0.18,'triangle',0.2),110); }
+function shriek(){ blip(1800,0.25,'sawtooth',0.12); }
+document.addEventListener('pointerdown', startAudio, {capture:true});
+
+/* ---------- volume (cursed) ---------- */
+const volNum=$('#vol-num'), volSlider=$('#vol-slider'), volTip=$('#vol-tip');
+let sliderTries=0, tipTimer=0;
+function setVol(v){ S.vol=v; volNum.textContent=v+'%'; volSlider.value=v; if(master) master.gain.setTargetAtTime(gainFor(v),AC.currentTime,0.02); }
+function tip(t){ volTip.textContent=t; volTip.hidden=false; clearTimeout(tipTimer); tipTimer=setTimeout(()=>volTip.hidden=true,1800); }
+$('#vol-btn').addEventListener('click',()=>{ setVol(S.vol<=0?100:S.vol-1); });
+const snap=()=>{ volSlider.value=S.vol; volSlider.classList.remove('shake'); void volSlider.offsetWidth; volSlider.classList.add('shake'); sliderTries++; if(sliderTries%4===3) tip('try the speaker.'); };
+volSlider.addEventListener('input',snap); volSlider.addEventListener('change',snap);
+
+/* ---------- clocks ---------- */
+function finalsAt(){ const n=new Date(); let d=new Date(n.getFullYear(),11,8,0,0,0); if(d<=n) d=new Date(n.getFullYear()+1,11,8,0,0,0); return d; }
+const FINALS=finalsAt();
+const pad=n=>String(n).padStart(2,'0');
+function tickClocks(){
+  const w=Math.floor((Date.now()-S.start)/1000);
+  $('#clk-wasted').textContent=`${pad(Math.floor(w/3600))}:${pad(Math.floor(w/60)%60)}:${pad(w%60)}`;
+  let f=Math.max(0,Math.floor((FINALS-Date.now())/1000)); const dd=Math.floor(f/86400); f%=86400;
+  $('#clk-finals').textContent=`${dd?dd+'D ':''}${pad(Math.floor(f/3600))}:${pad(Math.floor(f/60)%60)}:${pad(f%60)}`;
+}
+setInterval(tickClocks,1000); tickClocks();
+
+/* ---------- screens ---------- */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.hidden = s.id!==id);
+  const was=S.screen; S.screen=id; $('#stage').scrollTop=0;
+  document.body.classList.toggle('broom', id==='login');
+  if(id==='login') enterLogin(); else if(was==='login') leaveLogin();
+  if(id!=='home') startPopups();
+  if(id==='signup'||id==='login'){ if(!broPending && $('#bros').hidden) scheduleBros(id==='login'?8000:15000); }
+  else { $('#bros').hidden=true; clearTimeout(broTimer); clearInterval(broLineTimer); broPending=false; }
+}
+$('#go-signup').onclick=()=>{ show('signup'); setTimeout(()=>$('#su-user').focus(),50); };
+$('#go-login').onclick=()=>show('login');
+$('#su-skip').onclick=()=>show('login');
+$('#later').onclick=()=>show('login');
+
+/* ---------- glitches ---------- */
+function glitch(){ const s=$('#stage'); s.classList.remove('glitch'); void s.offsetWidth; s.classList.add('glitch'); }
+(function g(){ setTimeout(()=>{ if(S.screen!=='home') glitch(); g(); }, rand(9000,20000)); })();
+
+/* ---------- keyboard poltergeist ---------- */
+const POOL='xqzjkvw#%&?!0123456789';
+let poltBusy=false;
+function ghostType(el){
+  const ch=pick(POOL); const p=el.selectionStart ?? el.value.length;
+  el.value=el.value.slice(0,p)+ch+el.value.slice(p);
+  try{ el.setSelectionRange(p+1,p+1); }catch(e){}
+  el.classList.remove('possessed'); void el.offsetWidth; el.classList.add('possessed');
+  poltBusy=true; el.dispatchEvent(new Event('input',{bubbles:true})); poltBusy=false;
+}
+document.addEventListener('input',e=>{
+  const el=e.target; if(poltBusy||!(el instanceof HTMLInputElement)||el.type!=='text') return;
+  if(e.inputType==='insertText' && Math.random()<0.06) setTimeout(()=>ghostType(el),rand(80,300));
+});
+setInterval(()=>{
+  const el=document.activeElement;
+  if(el && el.tagName==='INPUT' && el.type==='text' && Math.random()<0.55) ghostType(el);
+  else if(S.screen==='login' && Math.random()<0.3 && pass.length<target.length){ pass.push(pick(POOL)); renderPass(); say('Something typed into your password.'); }
+}, 21000);
+
+/* ---------- pop-ups ---------- */
+const POPS=[
+  ['WARNING.EXE','We know what you did. Your parents do too.'],
+  ['security_notice','We know you lied to your partner about what happened last Thursday night.'],
+  ['Calendar','Why the hell are you wasting your time here? You have finals next week.'],
+  ['System message','Bro you\'re 20. Delete Hinge.'],
+  ['Hostel notice','Everyone on your floor knows you\'re the one that wrecked the bathroom.'],
+];
+let popIdx=0, popsOn=false;
+function popup(title,msg){
+  const box=$('#pops'); if(box.children.length>=3) return;
+  const el=document.createElement('div'); el.className='pop';
+  el.innerHTML='<div class="pop-bar"><span></span><button class="pop-x" type="button" aria-label="Close">X</button></div><div class="pop-body"><canvas width="8" height="8"></canvas><p></p></div><div class="pop-foot"><button class="btn sm" type="button">OK</button></div>';
+  el.querySelector('.pop-bar span').textContent=title; el.querySelector('p').textContent=msg;
+  drawMap(el.querySelector('canvas').getContext('2d'),SKULL,{b:'#e9e3cf',k:'#0e0f1d'},0,0,1);
+  el.querySelector('canvas').style.background='#0e0f1d';
+  const close=()=>el.remove();
+  el.querySelector('.pop-x').onclick=close; el.querySelector('.pop-foot .btn').onclick=close;
+  box.appendChild(el);
+  const w=el.offsetWidth, h=el.offsetHeight;
+  el.style.left=Math.max(16,rand(16,innerWidth-w-16))+'px';
+  el.style.top=Math.max(70,rand(70,innerHeight-h-16))+'px';
+  ding();
+}
+function startPopups(){
+  if(popsOn) return; popsOn=true;
+  const next=()=>setTimeout(()=>{ const [t,m]=POPS[popIdx++%POPS.length]; popup(t,m); next(); }, rand(18000,32000));
+  setTimeout(()=>{ const [t,m]=POPS[popIdx++]; popup(t,m); next(); }, 9000);
+}
+
+/* ---------- dialog ---------- */
+function dialog(h,p,btns){
+  return new Promise(res=>{
+    $('#dlg-h').textContent=h; $('#dlg-p').textContent=p; const row=$('#dlg-btns'); row.innerHTML='';
+    btns.forEach((b,i)=>{ const el=document.createElement('button'); el.type='button'; el.className='btn'+(i?' ghost':''); el.textContent=b; el.onclick=()=>{ $('#dlg').hidden=true; res(i); }; row.appendChild(el); });
+    $('#dlg').hidden=false; row.firstChild.focus();
+  });
+}
+
+/* ---------- sign up (the password game) ---------- */
+const LANDLOCKED=['nepal','bhutan','mongolia','laos','chad','mali','niger','bolivia','paraguay','austria','switzerland','hungary','uganda','rwanda','zambia','malawi','afghanistan','kazakhstan','armenia','serbia','belarus','slovakia','czechia','botswana','ethiopia','lesotho','andorra','liechtenstein','luxembourg','zimbabwe','burundi','eswatini','moldova','kosovo','vatican','san marino','tajikistan','kyrgyzstan','uzbekistan','turkmenistan','azerbaijan','burkina faso','north macedonia','south sudan'];
+const isPrime=n=>{ if(n<2) return false; for(let i=2;i*i<=n;i++) if(n%i===0) return false; return true; };
+const RULES=[
+  {t:'Your password must be at least 8 characters.', f:p=>Array.from(p).length>=8},
+  {t:'Must include an uppercase letter.', f:p=>/[A-Z]/.test(p)},
+  {t:'Must include a number.', f:p=>/\d/.test(p)},
+  {t:'Must include a special character.', f:p=>/[^A-Za-z0-9\s]/.test(p)},
+  {t:'Must include a pumpkin. <button class="emoji-btn" type="button" data-ins="🎃" aria-label="Insert pumpkin">🎃</button>', f:p=>p.includes('🎃')},
+  {t:'The digits in your password must add up to 13.', f:p=>(p.match(/\d/g)||[]).reduce((a,b)=>a+ +b,0)===13},
+  {t:'Must include the name of your ex\'s dog.<input type="text" id="su-dog" placeholder="their dog\'s name" autocomplete="off" aria-label="Your ex\'s dog\'s name">', f:p=>{ const d=($('#su-dog')?.value||'').trim().toLowerCase(); return d.length>=2 && p.toLowerCase().includes(d); }},
+  {t:'Must include a country with no coastline.', f:p=>{ const l=p.toLowerCase().replace(/nigeria|somalia/g,''); return LANDLOCKED.some(c=>l.includes(c)); }},
+  {t:'The length of your password must be a prime number.', f:p=>isPrime(Array.from(p).length)},
+];
+const rulesEl=$('#rules'); let unlocked=1;
+RULES.forEach((r,i)=>{ const li=document.createElement('li'); li.hidden=true; li.innerHTML=`<b>RULE ${i+1}</b><span>${r.t}</span>`; rulesEl.appendChild(li); });
+rulesEl.addEventListener('click',e=>{ const b=e.target.closest('[data-ins]'); if(!b) return; const el=$('#su-pass'); const p=el.selectionStart ?? el.value.length; el.value=el.value.slice(0,p)+b.dataset.ins+el.value.slice(p); el.focus(); el.setSelectionRange(p+2,p+2); checkRules(); });
+function checkRules(){
+  const p=$('#su-pass').value; $('#su-count').textContent='Length '+Array.from(p).length;
+  let res=RULES.map(r=>r.f(p));
+  if(p.length) while(unlocked<RULES.length && res.slice(0,unlocked).every(Boolean)) unlocked++;
+  [...rulesEl.children].forEach((li,i)=>{ li.hidden = !p.length || i>=unlocked; li.classList.toggle('ok',res[i]); });
+  $('#su-create').disabled = !(unlocked===RULES.length && res.every(Boolean) && $('#su-user').value.trim());
+}
+['#su-pass','#su-user'].forEach(s=>$(s).addEventListener('input',checkRules));
+rulesEl.addEventListener('input',checkRules);
+$('#su-create').onclick=()=>{
+  S.account={user:$('#su-user').value.trim(), pass:$('#su-pass').value};
+  try{ localStorage.setItem('hl-account',JSON.stringify(S.account)); }catch(e){}
+  show('created');
+};
+
+/* ---------- login ---------- */
+const fx=$('#fx'), fctx=fx.getContext('2d'); let DPR=1;
+function sizeFx(){ DPR=Math.min(2,devicePixelRatio||1); fx.width=innerWidth*DPR; fx.height=innerHeight*DPR; fctx.setTransform(DPR,0,0,DPR,0,0); }
+sizeFx();
+addEventListener('resize',()=>{ sizeBg(); sizeFx(); if(!lbMoved) placeLb(); });
+
+const DECOY=Array.from('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789!@#$%&*?+=~Il1O0');
+let pass=[], target=[], letters=[], carrying=null, loopOn=false, lastT=0;
+let px=innerWidth/2, py=innerHeight/2, bx=px, by=py, holdUntil=0, enteredAt=0;
+let lbMoved=false, dodge=0.85, dodgeCount=0, lastDodge=0, broTimer=0, broLineTimer=0, broPending=false, broNo=0, escTimer=0, forgotN=0, msgTimer=0;
+function graphemes(s){ try{ return Array.from(new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(s),x=>x.segment); }catch(e){ return Array.from(s); } }
+const shown=ch=>ch===' '?'␣':ch;
+const lb=$('#login-btn'), passbox=$('#passbox');
+
+function kind(ch){ if(/[A-Z]/.test(ch)) return 'U'; if(/[a-z]/.test(ch)) return 'l'; if(/\d/.test(ch)) return 'd'; return 's'; }
+function spawn(ch,x,y,vx,vy){
+  const k=kind(ch); const sp = k==='U'?1.8 : k==='s'?1.35 : 1;
+  letters.push({ch,k,x:x??rand(30,innerWidth-30),y:y??rand(90,innerHeight-30),vx:vx??rand(-1,1),vy:vy??rand(-1,1),sp,ph:Math.random()*6});
+}
+function ensureTargets(){
+  const need={}; target.forEach(c=>need[c]=(need[c]||0)+1);
+  for(const c in need){ const have=letters.filter(l=>l.ch===c).length + (carrying&&carrying.ch===c?1:0); if(have<1) spawn(c); }
+}
+function fillField(){
+  letters=[]; const uniq=[...new Set(target)];
+  uniq.forEach(c=>spawn(c)); uniq.forEach(c=>spawn(c));
+  const n=Math.max(innerWidth<600?18:30, letters.length+(innerWidth<600?6:12));
+  while(letters.length<n) spawn(pick(DECOY));
+}
+function renderPass(){
+  passbox.innerHTML='';
+  for(let i=0;i<target.length;i++){ const s=document.createElement('span'); s.className='slot'+(pass[i]?' f':''); s.textContent=pass[i]?shown(pass[i]):''; passbox.appendChild(s); }
+}
+function say(t){ const m=$('#li-msg'); m.textContent=t; clearTimeout(msgTimer); msgTimer=setTimeout(()=>m.textContent='',3500); }
+function placeLb(){ const r=$('#btn-slot').getBoundingClientRect(); lb.style.left=r.left+'px'; lb.style.top=r.top+'px'; }
+$('#stage').addEventListener('scroll',()=>{ if(S.screen==='login'&&!lbMoved) placeLb(); });
+
+async function enterLogin(){
+  if(!S.account){
+    S.account={user:'ghost',pass:'bOo!7🎃'};
+    await dialog('No account found.','We made you one. Username: ghost. Password: bOo!7🎃. Memorise it.',['OK']);
+  }
+  target=graphemes(S.account.pass);
+  pass=[]; carrying=null; forgotN=0; renderPass();
+  fillField(); enteredAt=Date.now();
+  lb.hidden=false; lbMoved=false; dodge=0.85; dodgeCount=0; requestAnimationFrame(placeLb);
+  if(!$('#bros').hidden) lb.style.visibility='hidden';
+  clearInterval(escTimer); escTimer=setInterval(()=>{
+    if(pass.length && Math.random()<0.15){ const ch=pass.pop(); renderPass(); escape(ch); say(`"${shown(ch)}" climbed out of the box.`); }
+  },9000);
+  if(!loopOn){ loopOn=true; lastT=performance.now(); requestAnimationFrame(fxLoop); }
+}
+function leaveLogin(){ lb.hidden=true; clearInterval(escTimer); loopOn=false; fctx.clearRect(0,0,innerWidth,innerHeight); }
+function escape(ch){ const r=passbox.getBoundingClientRect(); spawn(ch,r.left+r.width/2,r.top+r.height/2,rand(-3,3),rand(-5,-3)); shriek(); }
+
+addEventListener('pointermove',e=>{ px=e.clientX; py=e.clientY; if(S.screen==='login') maybeDodge(); },{passive:true});
+addEventListener('pointerdown',e=>{
+  px=e.clientX; py=e.clientY;
+  if(S.screen!=='login' || !carrying) return;
+  const r=passbox.getBoundingClientRect(), pad=24;
+  const overBox = (bx>r.left-pad && bx<r.right+pad && by>r.top-pad && by<r.bottom+pad) || passbox.contains(e.target);
+  if(!overBox) return;
+  const ch=carrying.ch; carrying=null;
+  if(pass.length>=target.length){ escape(ch); say('The box is full. Delete something.'); return; }
+  if(Math.random()<0.25){ escape(ch); say(`"${shown(ch)}" didn't want to stay.`); return; }
+  pass.push(ch); renderPass(); blip(880); ensureTargets();
+});
+$('#li-back').onclick=()=>{ if(pass.length){ const ch=pass.pop(); renderPass(); spawn(ch,undefined,undefined); } };
+$('#li-forgot').onclick=()=>{ forgotN++; if(forgotN===1) say('Hint: you made it.'); else say('Fine. It\'s '+target.join('')); };
+
+function moveLb(){
+  lbMoved=true; const w=lb.offsetWidth||110, h=lb.offsetHeight||40;
+  lb.style.left=rand(16,innerWidth-w-16)+'px'; lb.style.top=rand(80,innerHeight-h-16)+'px';
+}
+function dodgeNow(){
+  lastDodge=performance.now(); dodgeCount++; dodge = dodgeCount>=12 ? 0 : Math.max(0.05,dodge*0.8);
+  if(Math.random()<0.22){ lb.style.visibility='hidden'; setTimeout(()=>{ moveLb(); lb.style.visibility=''; },rand(900,1600)); }
+  else moveLb();
+}
+function maybeDodge(){
+  if(lb.hidden||lb.style.visibility==='hidden'||performance.now()-lastDodge<600) return;
+  const r=lb.getBoundingClientRect(); const d=Math.hypot(px-(r.left+r.width/2),py-(r.top+r.height/2));
+  if(d<70 && Math.random()<dodge) dodgeNow();
+}
+lb.addEventListener('pointerdown',e=>{ if(Math.random()<dodge*0.3){ e.preventDefault(); dodgeNow(); } });
+lb.addEventListener('click',tryLogin);
+
+const ERRS=['Wrong username or password. We won\'t say which.','Incorrect. The scarecrow watched you get that wrong.','That isn\'t your password. It belongs to someone else.'];
+async function tryLogin(){
+  if(!S.captcha){ popup('Verification','Prove you\'re human first. Tick the box.'); return; }
+  const okU=$('#li-user').value.trim().toLowerCase()===S.account.user.toLowerCase();
+  const okP=pass.join('')===target.join('');
+  if(!(okU&&okP)){ say(pick(ERRS)); glitch(); screech(); moveLb(); return; }
+  if(await dialog('Are you sure?','',['Yes','No'])) return;
+  if(await dialog('Are you sure sure?','',['Yes','No'])) return;
+  await dialog('Okay.','But your mom wouldn\'t be.',['Log in anyway']);
+  runEnding();
+}
+
+/* fx loop: letters + broom */
+function fxLoop(now){
+  if(!loopOn) return;
+  const dt=Math.min(50,now-lastT); lastT=now; const f=dt/16.67;
+  const W=innerWidth, H=innerHeight, c=fctx;
+  c.clearRect(0,0,W,H);
+  // heavy cursor
+  const secs=(Date.now()-S.start)/1000;
+  const k=Math.max(0.03,0.32*Math.exp(-secs/160));
+  if(Date.now()>holdUntil){ const kk=1-Math.pow(1-k,f); bx+=(px-bx)*kk; by+=(py-by)*kk; if(Math.random()<0.0015*f*(1+secs/60)) holdUntil=Date.now()+rand(300,800); }
+  // letters
+  c.textAlign='center'; c.textBaseline='middle';
+  const brosOpen=!$('#bros').hidden;
+  for(let i=letters.length-1;i>=0;i--){
+    const L=letters[i];
+    L.ph+=0.03*f;
+    const dx=L.x-bx, dy=L.y-by, d=Math.hypot(dx,dy)||1;
+    if(L.k==='U' && d<110){ L.vx+=dx/d*0.12*f; L.vy+=dy/d*0.12*f; }
+    L.vx+=Math.cos(L.ph)*0.02*f; L.vy+=Math.sin(L.ph*1.3)*0.02*f;
+    const sp=Math.hypot(L.vx,L.vy), max=1.6*L.sp; if(sp>max){L.vx*=max/sp;L.vy*=max/sp;}
+    L.x+=L.vx*L.sp*f; L.y+=L.vy*L.sp*f;
+    if(L.x<16){L.x=16;L.vx=Math.abs(L.vx);} if(L.x>W-16){L.x=W-16;L.vx=-Math.abs(L.vx);}
+    if(L.y<76){L.y=76;L.vy=Math.abs(L.vy);} if(L.y>H-16){L.y=H-16;L.vy=-Math.abs(L.vy);}
+    if(brosOpen) continue;
+    if(!carrying && d<26){ carrying=L; letters.splice(i,1); if(L.k==='s') shriek(); else blip(L.k==='U'?990:660); spawn(pick(DECOY)); continue; }
+    drawLetter(c,L.ch,L.k,L.x,L.y);
+  }
+  // broom
+  const s=3, ww=16*s, hh=10*s;
+  drawMap(c,WITCH,W_PAL,Math.round(bx-ww/2),Math.round(by-hh/2+Math.sin(now/220)*2),s);
+  if(carrying) drawLetter(c,carrying.ch,carrying.k,bx+30,by+18);
+  const r=passbox.getBoundingClientRect();
+  passbox.classList.toggle('hot', !!carrying && bx>r.left-24 && bx<r.right+24 && by>r.top-24 && by<r.bottom+24);
+  requestAnimationFrame(fxLoop);
+}
+const KCOL={U:'#e8c35a',l:'#e9e3cf',d:'#9ee05a',s:'#ee7f2d'};
+function drawLetter(c,ch,k,x,y){
+  c.fillStyle='rgba(14,15,29,.85)'; c.fillRect(x-14,y-14,28,28);
+  c.strokeStyle=KCOL[k]; c.lineWidth=2; c.strokeRect(x-14,y-14,28,28);
+  c.fillStyle=KCOL[k]; c.font=(k==='s'&&/\p{Extended_Pictographic}/u.test(ch))?'18px sans-serif':"14px 'Press Start 2P', monospace";
+  c.fillText(shown(ch),x+1,y+1);
+}
+
+/* ---------- Delhi boys ---------- */
+const BRO_LINES=[
+  ['ARYAN','bro, quick 2 mins? we\'re building B2B AI SaaS.'],
+  ['ADITYA','for founders, by founders. AI agents for your AI agents.'],
+  ['ARYAN','dad\'s a VC so funding is sorted. just need a co-founder.'],
+  ['ADITYA','you coming to Bohca this Saturday? I\'ll put you on the list.'],
+];
+function scheduleBros(ms){ clearTimeout(broTimer); broPending=true; broTimer=setTimeout(showBros,ms); }
+function setBroLine(w,l){
+  $('#bro-who').textContent=w; $('#bro-line').textContent=l;
+  const figs=document.querySelectorAll('.bro-row figure'); figs[0].classList.toggle('talking',w==='ARYAN'); figs[1].classList.toggle('talking',w==='ADITYA');
+  $('#bro-bubble').style.setProperty('--tail', w==='ARYAN'?'30%':'62%');
+  blip(w==='ARYAN'?260:340,0.06,'square',0.12); setTimeout(()=>blip(w==='ARYAN'?300:380,0.06,'square',0.12),90);
+}
+function showBros(){
+  broPending=false;
+  if(S.screen!=='login'&&S.screen!=='signup') return;
+  if(document.activeElement) document.activeElement.blur();
+  const b=$('#bros'); b.hidden=false; lb.style.visibility='hidden'; broNo=0; $('#bro-no').textContent='Not interested'; let i=0;
+  const say2=()=>{ const [w,l]=BRO_LINES[i++%BRO_LINES.length]; setBroLine(w,l); };
+  say2(); clearInterval(broLineTimer); broLineTimer=setInterval(say2,3200);
+}
+$('#bro-no').onclick=()=>{
+  broNo++;
+  if(broNo===1){ clearInterval(broLineTimer); setBroLine('ARYAN','bro just 30 seconds. hear me out.'); $('#bro-no').textContent='Still not interested'; return; }
+  if(broNo===2){ setBroLine('ADITYA','okay but are you coming Saturday or not?'); $('#bro-no').textContent='No. Bye.'; return; }
+  $('#bros').hidden=true; clearInterval(broLineTimer); lb.style.visibility='';
+  scheduleBros(35000);
+};
+
+/* ---------- captcha from hell ---------- */
+let capStage=1, capFails=0;
+function noise(cv,dense){
+  const c=cv.getContext('2d'), w=cv.width, h=cv.height, img=c.createImageData(w,h);
+  for(let i=0;i<img.data.length;i+=4){ const v=rand(60,140)|0; img.data[i]=v; img.data[i+1]=v+rand(-12,12); img.data[i+2]=v+rand(0,20); img.data[i+3]=255; }
+  c.putImageData(img,0,0);
+  for(let i=0;i<dense;i++){ c.strokeStyle=`rgba(${rand(40,160)|0},${rand(40,160)|0},${rand(60,180)|0},.5)`; c.lineWidth=rand(.5,2); c.beginPath(); c.moveTo(rand(0,w),rand(0,h)); c.bezierCurveTo(rand(0,w),rand(0,h),rand(0,w),rand(0,h),rand(0,w),rand(0,h)); c.stroke(); }
+  return c;
+}
+function capS1(){
+  capStage=1; $('#cap-head').innerHTML='Type the words in the image<strong>to continue</strong>';
+  $('#cap-s1').hidden=false; $('#cap-s1b').hidden=false; $('#cap-s2').hidden=true; $('#cap-input').value='';
+  const cv=$('#cap-img'), c=noise(cv,40);
+  c.save(); c.translate(80,28); c.rotate(rand(-.3,.3)); c.font="16px 'Press Start 2P', monospace"; c.fillStyle='rgba(100,100,120,.05)'; c.textAlign='center'; c.fillText(pick(['grave','hollow','boo','lantern']),0,0); c.restore();
+}
+function capS2(){
+  capStage=2; $('#cap-head').innerHTML='Select all squares with<strong>an X</strong>';
+  $('#cap-s1').hidden=true; $('#cap-s1b').hidden=true; const g=$('#cap-s2'); g.hidden=false; g.innerHTML='';
+  for(let i=0;i<16;i++){ const b=document.createElement('button'); b.type='button'; b.setAttribute('aria-label','Square '+(i+1)); const cv=document.createElement('canvas'); cv.width=20; cv.height=20; noise(cv,3); b.appendChild(cv); b.onclick=()=>b.classList.toggle('sel'); g.appendChild(b); }
+}
+$('#cap-check').onclick=()=>{ if(S.captcha) return; capFails=0; $('#cap-msg').textContent=''; capS2(); $('#captcha').hidden=false; };
+$('#cap-new').onclick=()=>{ $('#cap-msg').textContent=''; capS2(); };
+$('#cap-verify').onclick=()=>{
+  capFails++;
+  if(capFails<2){ $('#cap-msg').textContent='Incorrect. You missed some.'; capS2(); return; }
+  S.captcha=true; $('#cap-check').setAttribute('aria-checked','true'); $('#cap-check').textContent='✓';
+  $('#captcha').hidden=true; blip(1200,0.15,'triangle',0.15);
+};
+
+/* ---------- ending ---------- */
+async function runEnding(){
+  show('end');
+  const h=$('#end-h'), p=$('#end-p'), bar=$('#end-bar'); $('#end-actions').hidden=true; $('#end-barwrap').hidden=false; p.textContent='';
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const steps=[['Verifying credentials…',35],['Consulting the spirits…',70],['Asking Aditya\'s dad for approval…',99]];
+  let cur=0;
+  for(const [t,to] of steps){ h.textContent=t; while(cur<to){ cur++; bar.style.width=cur+'%'; await wait(30); } await wait(700); }
+  await wait(1800); bar.style.width='100%'; await wait(400);
+  $('#end-barwrap').hidden=true; h.textContent='Login successful.'; blip(1046,0.2,'triangle',0.2); await wait(1600);
+  h.textContent='Your session has expired.'; glitch(); screech(); await wait(1800);
+  const w=Math.floor((Date.now()-S.start)/1000), m=Math.floor(w/60), s=w%60;
+  p.textContent=`Congrats. You've wasted ${m} minute${m===1?'':'s'} and ${s} second${s===1?'':'s'}. Go study.`;
+  $('#end-actions').hidden=false;
+}
+$('#end-restart').onclick=()=>{ S.captcha=false; $('#cap-check').setAttribute('aria-checked','false'); $('#cap-check').textContent=''; $('#li-user').value=''; show('home'); };
+
+/* ---------- main bg loop ---------- */
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function bgLoop(t){ drawBg(reduce?0:t); requestAnimationFrame(bgLoop); }
+requestAnimationFrame(bgLoop);
+})();
+</script>
+</body>
+</html>
